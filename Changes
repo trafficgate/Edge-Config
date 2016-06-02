@@ -1,0 +1,20 @@
+Revision history for Perl extension Edge::Config.
+
+0.12  Mon Feb 25 18:32:07 JST 2002
+	* Taint clean
+
+0.11  Wed Dec 26 20:36:53 JST 2001
+	- Fixed bug in hash reference
+
+0.10  Wed Dec 26 19:20:59 JST 2001
+	* Cache AUTOLOAD (increase SPEED!)
+
+0.08  Mon Aug 27 16:41:52 JST 2001
+	* Bug fix in eval
+
+0.07  Mon Aug 27 13:50:39 JST 2001
+	- Can't locate 以外の eval エラーを検出
+
+0.01  Fri Mar  9 16:40:11 2001
+	- original version; created by h2xs 1.19
+

@@ -1,0 +1,7 @@
+Changes
+MANIFEST
+Makefile.PL
+README
+lib/Edge/Config.pm
+t/00_load.t
+t/01_test.t

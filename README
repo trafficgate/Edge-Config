@@ -1,0 +1,177 @@
+* 基本概念
+
+Edge::Config はオブジェクト指向もしくは Tie ハッシュを利用して設定変数
+を読み込むモジュールです。
+
+* 共通設定変数
+
+プロジェクトごとに Project::Config を作成し、Edge::Config を継承して使
+用します。設定変数は %Project::Config::_common::Config というハッシュに
+いれてください。
+
+
+＿＿＿＿＿＿＿＿＿＿＿＿＿＿ Project/Config.pm
+package Project::Config;
+
+use strict;
+use base 'Edge::Config';
+
+sub strict_param { 1; }	# 存在しない param で croak するかどうか
+			# デフォルト 1
+sub can_modify_param { 1; }	# param を変更できるかどうか
+				# デフォルト 0
+
+＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿ Project/Config/_common.pm
+package Project::Config::_common;
+# _common 用設定変数
+use vars qw(%Config);
+
+$Config{EMAIL_ADDRESS}	= 'miyagawa@edge.co.jp';
+$Config{URL}		= 'http://www.edge.co.jp/';
+
+1;
+
+
+
+クライアントスクリプトは以下のようにすれば利用できます。
+
+＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿ client.pl
+#!/usr/bin/perl
+
+use strict;
+use Project::Config;
+
+# ハッシュが好きな人
+tie my %config, 'Project::Config';
+print $Config{EMAIL_ADDRESS};
+
+# OO 好きな人
+my $config = Project::Config->new;
+# my $config = tied(%config); でも同じ
+
+print $config->param('EMAIL_ADDRESS');
+
+
+* ASP / テスト本番環境の混在など対策
+
+共通用変数以外に、スクリプトごとに読み分けたい設定変数がある場合には、
+名前つきで登録できます。ASP 的な案件や、本番環境とテスト環境を同居させ
+るときなどで有効です。
+
+本番環境を production, テスト環境を test という名前の設定で使用する例
+で考えます。それぞれ Project/Config/ の下に production.pm, test.pm を
+作成し、%Config のハッシュを追加すれば完了です。
+
+※ For hackers: 別にファイルは分かれていなくても、実行時にその名前空間
+   で %Config というハッシュが定義されていればよい。つまり、require し
+   ようとするが、失敗してもエラーはでない。
+
+
+＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿ Project/Config/production.pm
+package Project::Config::production;
+
+use strict;
+use vars qw(%Config);
+
+$Config{ERRORS_TO}	= 'webmaster@yourdomain.com';
+
+1;
+
+＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿ Project/Config/test.pm
+package Project::Config::test;
+
+use strict;
+use vars qw(%Config);
+
+$Config{ERRORS_TO}	= 'youraddress@yourdomain.com';
+
+1;
+
+
+
+クライアントスクリプトは以下のように、new または tie の引数に設定名を
+追加することで、設定変数を読み分けることができます。
+
+＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿ client.pl
+#!/usr/local/bin/perl
+
+use strict;
+use Project::Config;
+
+tie my %config, 'Project::Config', $ENV{CONFIG_NAME};
+print $config{ERRORS_TO};
+
+my $config = Project::Config->new($ENV{CONFIG_NAME});
+print $config->param('ERRORS_TO');
+
+
+Tips: httpd.conf で SetEnv CONFIG_NAME production
+      のように環境変数を設定し、クライアントで読み分ける方法が便利。
+
+
+* OO的な利用法での、配列、ハッシュリファレンスの扱い
+
+ハッシュの値として、リファレンスなどのデータ構造をいれた時の扱いについ
+て。
+
+1) Tie を使う場合はそのまま。
+
+2) OO 的な利用で、param() で取得する場合、
+   * スカラコンテキスト：リファレンス
+   * リストコンテキスト：リスト
+   が返されます。
+
+e.g.)
+
+$Config{MAILTO} = [qw(aaa@b.com hhh@g.com)];
+
+my $config = Project::Config->new;
+my @mailto = $config->param('MAILTO');
+my $first_mailto = $config->param('MAILTO')->[0];
+
+
+
+* テンプレートとの併用
+
+param() によって変数が取得できるため、HTML::Template の associate 機能
+を利用すれば、スクリプトに手をいれることなくテンプレート変数を追加でき
+ます。
+
+※ die_on_bad_params => 1 でもOK
+
+＿＿＿＿＿＿＿＿＿＿＿＿ template.pl
+#!/usr/local/bin/perl
+
+use HTML::Template;
+use Project::Config;
+
+tie my %config, 'Project::Config', 'test';
+
+my $q = CGI->new;
+my $tmpl = HTML::Template->new(filename => 'foo.html',
+                               associate => [ $q, tied(%config) ]);
+
+
+# もしくは
+my $config = Project::Config->new('test');
+
+my $q = CGI->new;
+my $tmpl = HTML::Template->new(filename => 'foo.html',
+                               associate => [ $q, $config ]);
+	
+
+* Advanced Tips
+
+共通変数用の名前空間はデフォルトで _common ですが、この名前空間も
+$ENV{EDGE_CONFIG_COMMON_NAME} という環境変数によって切替えが可能です。
+
+OO での利用の場合、AUTOLOADによるアクセサメソッドを使うことができます。
+
+my $config = My::Config->new;
+print $config->email;	# same as $config->param('email');
+
+sub case_sensitive { 0 } 
+を定義することで、設定キーの大文字小文字を無視することが可能。(デフォルトは1)
++ キーは大文字で書くけど、メソッドは小文字の方がいい場合
++ テンプレートへの埋め込み (もともとHTML::Template は case insensitive ですが)
+
